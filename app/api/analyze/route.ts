@@ -82,8 +82,9 @@ Important rules:
 `,
             },
             {
-              type: "input_image",
-              image_url: `data:${file.type};base64,${base64}`,
+            type: "input_image",
+            image_url: `data:${file.type};base64,${base64}`,
+            detail: "auto",
             },
           ],
         },
