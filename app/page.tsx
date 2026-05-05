@@ -225,12 +225,16 @@ export default function Home() {
               See what’s real before you believe it
             </div>
 
-            <h1 className="max-w-4xl text-5xl font-semibold leading-[1.04] tracking-[-0.04em] md:text-[82px]">
-              Detect suspicious
-              <span className="block bg-gradient-to-r from-white via-violet-200 to-cyan-200 bg-clip-text text-transparent">
-                AI-generated images
+            <h1 className="max-w-4xl text-5xl font-semibold leading-[1.16] tracking-[-0.045em] md:text-[78px]">
+              <span className="block">Detect</span>
+              <span className="block">suspicious</span>
+              <span className="-my-2 block bg-gradient-to-r from-white via-violet-200 to-cyan-200 bg-clip-text py-2 text-transparent">
+                AI-generated
               </span>
-              with clarity.
+              <span className="-my-2 block bg-gradient-to-r from-white via-violet-200 to-cyan-200 bg-clip-text py-2 text-transparent">
+                images
+              </span>
+              <span className="block">with clarity.</span>
             </h1>
 
             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
