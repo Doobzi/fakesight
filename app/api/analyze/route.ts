@@ -75,7 +75,7 @@ function getImageDimensions(buffer: Buffer) {
   if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
     let offset = 2;
 
-    while (offset < buffer.length) {
+    while (offset + 9 < buffer.length) {
       if (buffer[offset] !== 0xff) {
         offset += 1;
         continue;
@@ -84,8 +84,10 @@ function getImageDimensions(buffer: Buffer) {
       const marker = buffer[offset + 1];
 
       if (marker === 0xd9 || marker === 0xda) break;
+      if (offset + 4 >= buffer.length) break;
 
       const length = buffer.readUInt16BE(offset + 2);
+      if (length < 2) break;
 
       const isStartOfFrame =
         marker === 0xc0 ||
@@ -137,15 +139,13 @@ async function extractMetadata(file: File, buffer: Buffer): Promise<ExtractedMet
 
   let exifRaw: Record<string, unknown> | null = null;
 
-try {
-  const parsedExif = await parseExif(buffer);
+  try {
+    const parsedExif = await parseExif(buffer);
 
-  exifRaw = parsedExif
-    ? (parsedExif as Record<string, unknown>)
-    : null;
-} catch {
-  exifRaw = null;
-}
+    exifRaw = parsedExif ? (parsedExif as Record<string, unknown>) : null;
+  } catch {
+    exifRaw = null;
+  }
 
   const importantKeys = [
     "Make",
@@ -300,19 +300,107 @@ try {
   };
 }
 
-function normalizeReport(report: FakeSightReport): FakeSightReport {
-  const suspicionScore = Math.max(0, Math.min(100, Math.round(report.suspicionScore)));
+function calibrateReport(report: FakeSightReport, metadata: ExtractedMetadata): FakeSightReport {
+  let suspicionScore = Math.max(0, Math.min(100, Math.round(report.suspicionScore)));
 
-  let risk: Risk = report.risk;
+  const hasCameraMakeOrModel = Boolean(metadata.exif.Make || metadata.exif.Model);
+  const hasCaptureDate = Boolean(metadata.exif.DateTimeOriginal || metadata.exif.CreateDate);
+  const softwareText = `${metadata.exif.Software || ""} ${metadata.exif.CreatorTool || ""}`.toLowerCase();
 
-  if (suspicionScore >= 70) risk = "High";
-  else if (suspicionScore >= 40) risk = "Medium";
-  else risk = "Low";
+  const aiSoftwareTerms = [
+    "midjourney",
+    "stable diffusion",
+    "stability",
+    "dall",
+    "openai",
+    "comfyui",
+    "automatic1111",
+    "invokeai",
+    "firefly",
+    "leonardo",
+    "runway",
+  ];
+
+  const editingTerms = ["photoshop", "lightroom", "gimp", "canva", "affinity"];
+
+  if (!hasCameraMakeOrModel) {
+    suspicionScore += 12;
+  }
+
+  if (!hasCaptureDate) {
+    suspicionScore += 6;
+  }
+
+  if (
+    metadata.dimensions.width &&
+    metadata.dimensions.height &&
+    metadata.dimensions.width === metadata.dimensions.height &&
+    !hasCameraMakeOrModel
+  ) {
+    suspicionScore += 10;
+  }
+
+  if (aiSoftwareTerms.some((term) => softwareText.includes(term))) {
+    suspicionScore += 30;
+  } else if (editingTerms.some((term) => softwareText.includes(term))) {
+    suspicionScore += 10;
+  }
+
+  const suspiciousVisualText = report.visualSignals
+    .map((signal) => `${signal.title} ${signal.explanation}`)
+    .join(" ")
+    .toLowerCase();
+
+  const suspiciousTerms = [
+    "synthetic",
+    "ai",
+    "overly smooth",
+    "smooth skin",
+    "unrealistic",
+    "hyperrealistic",
+    "polished",
+    "inconsistent",
+    "artifact",
+    "plastic",
+    "uncanny",
+    "generated",
+    "manipulated",
+    "lack of camera metadata",
+    "limited provenance",
+    "no camera metadata",
+  ];
+
+  const matchedSuspiciousTerms = suspiciousTerms.filter((term) =>
+    suspiciousVisualText.includes(term)
+  );
+
+  suspicionScore += Math.min(18, matchedSuspiciousTerms.length * 4);
+
+  suspicionScore = Math.max(0, Math.min(100, suspicionScore));
+
+  let risk: Risk = "Low";
+
+  if (suspicionScore >= 70) {
+    risk = "High";
+  } else if (suspicionScore >= 40) {
+    risk = "Medium";
+  }
+
+  let verdict = report.verdict;
+
+  if (suspicionScore >= 75) {
+    verdict = "Highly suspicious";
+  } else if (suspicionScore >= 45) {
+    verdict = "Needs review";
+  } else {
+    verdict = "Low suspicion";
+  }
 
   return {
     ...report,
     suspicionScore,
     risk,
+    verdict,
     visualSignals: report.visualSignals.slice(0, 5),
     metadataSignals: report.metadataSignals.slice(0, 5),
   };
@@ -505,7 +593,7 @@ ${JSON.stringify(metadata, null, 2)}
     });
 
     const parsed = JSON.parse(response.output_text) as FakeSightReport;
-    const report = normalizeReport(parsed);
+    const report = calibrateReport(parsed, metadata);
 
     return NextResponse.json({
       report,
