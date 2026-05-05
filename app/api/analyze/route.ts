@@ -25,20 +25,14 @@ export async function POST(request: Request) {
     const file = formData.get("image") as File | null;
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No image uploaded" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No image uploaded" }, { status: 400 });
     }
 
     if (!file.type.startsWith("image/")) {
-      return NextResponse.json(
-        { error: "Uploaded file must be an image" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Uploaded file must be an image" }, { status: 400 });
     }
 
-    const maxSize = 8 * 1024 * 1024; // 8MB
+    const maxSize = 8 * 1024 * 1024;
 
     if (file.size > maxSize) {
       return NextResponse.json(
@@ -82,9 +76,9 @@ Important rules:
 `,
             },
             {
-            type: "input_image",
-            image_url: `data:${file.type};base64,${base64}`,
-            detail: "auto",
+              type: "input_image",
+              image_url: `data:${file.type};base64,${base64}`,
+              detail: "auto",
             },
           ],
         },
@@ -166,9 +160,7 @@ Important rules:
 
     const report = JSON.parse(response.output_text) as FakeSightReport;
 
-    return NextResponse.json({
-      report,
-    });
+    return NextResponse.json({ report });
   } catch (error) {
     console.error("FakeSight analysis failed:", error);
 

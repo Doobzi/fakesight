@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useRef, useState } from "react";
 
 type Risk = "Low" | "Medium" | "High";
 
@@ -36,12 +36,7 @@ function UploadGlyph() {
       className="text-white/85"
       aria-hidden="true"
     >
-      <path
-        d="M12 15V7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M12 15V7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path
         d="M8.8 10.2L12 7L15.2 10.2"
         stroke="currentColor"
@@ -49,12 +44,7 @@ function UploadGlyph() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path
-        d="M7 17.5H17"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M7 17.5H17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -97,17 +87,9 @@ function ShieldIcon() {
 }
 
 function riskBadgeClasses(risk?: Risk | null) {
-  if (risk === "Low") {
-    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (risk === "Medium") {
-    return "border-amber-400/20 bg-amber-500/10 text-amber-300";
-  }
-
-  if (risk === "High") {
-    return "border-rose-400/20 bg-rose-500/10 text-rose-300";
-  }
+  if (risk === "Low") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-300";
+  if (risk === "Medium") return "border-amber-400/20 bg-amber-500/10 text-amber-300";
+  if (risk === "High") return "border-rose-400/20 bg-rose-500/10 text-rose-300";
 
   return "border-white/10 bg-white/[0.04] text-white/60";
 }
@@ -131,6 +113,7 @@ export default function Home() {
   const [report, setReport] = useState<FakeSightReport | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const ringValue = scoreRing(report?.score);
 
@@ -138,38 +121,44 @@ export default function Home() {
     inputRef.current?.click();
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const selected = event.target.files?.[0] || null;
-
-    
-
-    setFile(selected);
+  function selectImage(selected: File | null) {
     setReport(null);
     setError("");
 
-    if (selected) {
-      setPreview(URL.createObjectURL(selected));
-    } else {
-      setPreview(null);
+    if (!selected) {
+      setFile(null);
+      setPreview((oldPreview) => {
+        if (oldPreview) URL.revokeObjectURL(oldPreview);
+        return null;
+      });
+      return;
     }
+
+    if (!selected.type.startsWith("image/")) {
+      setError("Please upload an image file.");
+      return;
+    }
+
+    setFile(selected);
+    setPreview((oldPreview) => {
+      if (oldPreview) URL.revokeObjectURL(oldPreview);
+      return URL.createObjectURL(selected);
+    });
   }
 
-  function handleDroppedFile(droppedFile: File | null) {
-  if (!droppedFile || !droppedFile.type.startsWith("image/")) return;
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] || null;
+    selectImage(selected);
+  }
 
-  setFile(droppedFile);
-  setReport(null);
-  setError("");
-  setPreview(URL.createObjectURL(droppedFile));
-}
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
 
-function handleDrop(event: React.DragEvent<HTMLDivElement>) {
-  event.preventDefault();
-  event.stopPropagation();
-
-  const droppedFile = event.dataTransfer.files?.[0] || null;
-  handleDroppedFile(droppedFile);
-}
+    const droppedFile = event.dataTransfer.files?.[0] || null;
+    selectImage(droppedFile);
+  }
 
   async function analyzeImage() {
     if (!file) return;
@@ -205,21 +194,20 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-      {/* Background */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-[-120px] top-[80px] h-[320px] w-[320px] rounded-full bg-violet-600/12 blur-[120px]" />
+        <div className="absolute left-[-120px] top-[80px] h-[320px] w-[320px] rounded-full bg-violet-600/[0.12] blur-[120px]" />
         <div className="absolute right-[-120px] top-[140px] h-[260px] w-[260px] rounded-full bg-cyan-500/10 blur-[120px]" />
         <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:44px_44px]" />
       </div>
 
       <div className="relative mx-auto max-w-7xl px-6 py-6 md:px-8 lg:px-10">
-        {/* Header */}
         <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0b0b0f] px-5 py-4">
           <div className="flex items-center gap-3">
             <LogoMark />
+
             <div>
               <div className="text-xl font-semibold tracking-tight">FakeSight</div>
-              <div className="text-xs text-white/45">AI content investigation platform</div>
+              <div className="text-xs text-white/[0.45]">AI content investigation platform</div>
             </div>
           </div>
 
@@ -230,15 +218,14 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
           </div>
         </header>
 
-        {/* Hero */}
-        <section className="grid gap-12 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:py-16">
+        <section className="grid gap-12 py-12 lg:grid-cols-[1fr_0.92fr] lg:items-start lg:py-16">
           <div className="pt-2">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-sm text-violet-200">
               <span className="h-2 w-2 rounded-full bg-violet-300" />
               See what’s real before you believe it
             </div>
 
-            <h1 className="max-w-4xl text-5xl font-semibold leading-[0.94] tracking-tight md:text-7xl">
+            <h1 className="max-w-4xl text-5xl font-semibold leading-[1.04] tracking-[-0.04em] md:text-[82px]">
               Detect suspicious
               <span className="block bg-gradient-to-r from-white via-violet-200 to-cyan-200 bg-clip-text text-transparent">
                 AI-generated images
@@ -296,14 +283,14 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
             </div>
           </div>
 
-          {/* Right panel */}
           <div className="relative">
-            <div className="absolute -inset-0.5 rounded-[28px] bg-gradient-to-br from-violet-500/15 via-transparent to-cyan-400/10 blur-2xl" />
+            <div className="absolute -inset-0.5 rounded-[28px] bg-gradient-to-br from-violet-500/[0.15] via-transparent to-cyan-400/10 blur-2xl" />
+
             <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0b0f] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <div className="text-xl font-semibold">Investigate an image</div>
-                  <div className="mt-1 text-sm text-white/45">
+                  <div className="mt-1 text-sm text-white/[0.45]">
                     Upload content and generate a FakeSight report
                   </div>
                 </div>
@@ -321,24 +308,38 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                 onChange={handleFileChange}
               />
 
-              {/* Upload area */}
               <div className="rounded-3xl border border-white/10 bg-[#101014] p-4">
                 <div
                   role="button"
                   tabIndex={0}
                   onClick={openFilePicker}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={handleDrop}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
                       openFilePicker();
                     }
                   }}
-                  className="flex min-h-[290px] w-full cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-white/12 bg-[#0a0a0e] px-6 py-8 text-center outline-none transition-colors hover:border-violet-400/25"
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsDragging(true);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsDragging(false);
+                  }}
+                  onDrop={handleDrop}
+                  className={`flex min-h-[290px] w-full cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed px-6 py-8 text-center outline-none transition-colors ${
+                    isDragging
+                      ? "border-violet-300/60 bg-violet-500/[0.08]"
+                      : "border-white/[0.12] bg-[#0a0a0e] hover:border-violet-400/25"
+                  }`}
                 >
                   {preview ? (
                     <img
@@ -351,10 +352,12 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                       <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-500/10 text-violet-200">
                         <UploadGlyph />
                       </div>
-                      <div className="text-xl font-medium text-white/92">
+
+                      <div className="text-xl font-medium text-white/90">
                         Drop an image here or click to upload
                       </div>
-                      <div className="mt-2 text-sm text-white/45">
+
+                      <div className="mt-2 text-sm text-white/[0.45]">
                         Supports screenshots, photos, and suspicious AI images
                       </div>
                     </>
@@ -381,18 +384,17 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                 </div>
 
                 {file && (
-                  <div className="mt-3 text-xs text-white/45">
+                  <div className="mt-3 text-xs text-white/[0.45]">
                     Selected: <span className="text-white/70">{file.name}</span>
                   </div>
                 )}
               </div>
 
-              {/* Report */}
               <div className="mt-5 rounded-3xl border border-white/10 bg-[#101014] p-4">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold">FakeSight Report</div>
-                    <div className="text-sm text-white/45">Structured investigation output</div>
+                    <div className="text-sm text-white/[0.45]">Structured investigation output</div>
                   </div>
 
                   <div className={`rounded-full border px-3 py-1 text-xs ${riskBadgeClasses(report?.risk)}`}>
@@ -442,7 +444,9 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                         <div className="text-xs uppercase tracking-[0.18em] text-white/40">
                           Verdict
                         </div>
+
                         <div className="mt-3 text-2xl font-semibold">{report.verdict}</div>
+
                         <p className="mt-3 text-sm leading-7 text-white/70">{report.summary}</p>
                       </div>
                     </div>
@@ -456,13 +460,15 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                         {report.signals.map((signal, index) => (
                           <div
                             key={index}
-                            className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3"
+                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3">
                               <div
                                 className={`h-2.5 w-2.5 rounded-full ${severityDotClasses(signal.severity)}`}
                               />
+
                               <div className="font-medium text-white/90">{signal.title}</div>
+
                               <div
                                 className={`rounded-full border px-2 py-0.5 text-[11px] ${riskBadgeClasses(signal.severity)}`}
                               >
@@ -482,13 +488,14 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                       <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/75">
                         Recommendation
                       </div>
+
                       <p className="mt-3 text-sm leading-7 text-cyan-50/80">
                         {report.recommendation}
                       </p>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <p className="text-xs leading-6 text-white/45">{report.disclaimer}</p>
+                      <p className="text-xs leading-6 text-white/[0.45]">{report.disclaimer}</p>
                     </div>
                   </div>
                 ) : (
@@ -497,6 +504,7 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                       <div className="text-xs uppercase tracking-[0.18em] text-white/40">
                         Authenticity score
                       </div>
+
                       <div className="mt-5 flex items-center justify-center">
                         <div className="flex h-28 w-28 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-3xl font-semibold text-white/25">
                           --
@@ -509,7 +517,8 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                         <div className="text-xs uppercase tracking-[0.18em] text-white/40">
                           Summary
                         </div>
-                        <p className="mt-3 text-sm text-white/45">
+
+                        <p className="mt-3 text-sm text-white/[0.45]">
                           Upload an image to generate a full FakeSight report.
                         </p>
                       </div>
@@ -518,7 +527,8 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
                         <div className="text-xs uppercase tracking-[0.18em] text-white/40">
                           Signals
                         </div>
-                        <p className="mt-3 text-sm text-white/45">
+
+                        <p className="mt-3 text-sm text-white/[0.45]">
                           Key investigation signals will appear here after analysis.
                         </p>
                       </div>
@@ -530,10 +540,10 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
           </div>
         </section>
 
-        {/* Lower section */}
         <section className="pb-14">
           <div className="mb-6">
             <div className="text-sm uppercase tracking-[0.22em] text-white/40">Why FakeSight</div>
+
             <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
               A cleaner trust layer for the AI internet
             </h2>
@@ -542,6 +552,7 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
               <div className="mb-4 text-lg font-semibold">Simple to understand</div>
+
               <p className="text-sm leading-7 text-white/60">
                 FakeSight turns complex visual analysis into a result normal users can actually
                 read and understand.
@@ -550,6 +561,7 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
 
             <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
               <div className="mb-4 text-lg font-semibold">Designed for trust</div>
+
               <p className="text-sm leading-7 text-white/60">
                 The product is built around careful language, clear reporting, and useful next
                 steps instead of false certainty.
@@ -558,6 +570,7 @@ function handleDrop(event: React.DragEvent<HTMLDivElement>) {
 
             <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
               <div className="mb-4 text-lg font-semibold">Ready to expand</div>
+
               <p className="text-sm leading-7 text-white/60">
                 This same foundation can later power browser tools, APIs, and trust infrastructure
                 for larger platforms.
