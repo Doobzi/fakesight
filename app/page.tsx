@@ -171,6 +171,45 @@ function SignalCard({ signal }: { signal: Signal }) {
   );
 }
 
+function buildPlainTextReport(report: FakeSightReport, fileName?: string | null) {
+  const visualSignals = report.visualSignals
+    .map(
+      (signal, index) =>
+        `${index + 1}. ${signal.title} (${signal.severity})\n   ${signal.explanation}`
+    )
+    .join("\n\n");
+
+  const metadataSignals = report.metadataSignals
+    .map(
+      (signal, index) =>
+        `${index + 1}. ${signal.title} (${signal.severity})\n   ${signal.explanation}`
+    )
+    .join("\n\n");
+
+  return `FakeSight V2 Investigation Report
+
+File: ${fileName || "Unknown"}
+AI suspicion score: ${report.suspicionScore}/100
+Risk: ${report.risk}
+Confidence: ${report.confidence}
+Verdict: ${report.verdict}
+
+Summary:
+${report.summary}
+
+Visual signals:
+${visualSignals}
+
+Metadata signals:
+${metadataSignals}
+
+Recommendation:
+${report.recommendation}
+
+Disclaimer:
+${report.disclaimer}`;
+}
+
 export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -181,6 +220,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackChoice | null>(null);
+  const [exportStatus, setExportStatus] = useState("");
 
   const ringValue = scoreRing(report?.suspicionScore);
 
@@ -192,6 +232,7 @@ export default function Home() {
     setReport(null);
     setError("");
     setFeedback(null);
+    setExportStatus("");
 
     if (!selected) {
       setFile(null);
@@ -253,6 +294,52 @@ export default function Home() {
     }
   }
 
+  async function copyReport() {
+    if (!report) return;
+
+    const reportText = buildPlainTextReport(report, file?.name);
+
+    try {
+      await navigator.clipboard.writeText(reportText);
+      setExportStatus("Report copied to clipboard.");
+    } catch {
+      setExportStatus("Copy failed. Please try again.");
+    }
+  }
+
+  function downloadReport() {
+    if (!report) return;
+
+    const payload = {
+      product: "FakeSight",
+      version: "V2",
+      generatedAt: new Date().toISOString(),
+      file: {
+        name: file?.name || "unknown",
+        type: file?.type || "unknown",
+        sizeBytes: file?.size || 0,
+      },
+      report,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `fakesight-report-${new Date().toISOString().slice(0, 10)}.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+    setExportStatus("JSON report downloaded.");
+  }
+
   async function analyzeImage() {
     if (!file) return;
 
@@ -261,6 +348,7 @@ export default function Home() {
       setError("");
       setReport(null);
       setFeedback(null);
+      setExportStatus("");
 
       const formData = new FormData();
       formData.append("image", file);
@@ -610,6 +698,38 @@ export default function Home() {
                       <p className="mt-3 text-sm leading-7 text-cyan-50/80">
                         {report.recommendation}
                       </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Save report
+                      </div>
+
+                      <p className="mt-3 text-sm leading-7 text-white/60">
+                        Copy a readable report or download the full structured result as JSON.
+                      </p>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={copyReport}
+                          className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
+                        >
+                          Copy report
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={downloadReport}
+                          className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
+                        >
+                          Download JSON
+                        </button>
+                      </div>
+
+                      {exportStatus ? (
+                        <p className="mt-3 text-xs leading-6 text-cyan-100/60">{exportStatus}</p>
+                      ) : null}
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
