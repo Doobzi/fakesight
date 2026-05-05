@@ -1,6 +1,11 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { parse as parseExif } from "exifr";
+import {
+  checkRateLimit,
+  getClientIp,
+  getRateLimitConfig,
+} from "../../lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -57,7 +62,6 @@ function safeString(value: unknown) {
 }
 
 function getImageDimensions(buffer: Buffer) {
-  // PNG
   if (
     buffer.length >= 24 &&
     buffer[0] === 0x89 &&
@@ -71,7 +75,6 @@ function getImageDimensions(buffer: Buffer) {
     };
   }
 
-  // JPEG
   if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
     let offset = 2;
 
@@ -115,7 +118,6 @@ function getImageDimensions(buffer: Buffer) {
     }
   }
 
-  // WEBP VP8X
   if (
     buffer.length >= 30 &&
     buffer.toString("ascii", 0, 4) === "RIFF" &&
@@ -141,7 +143,6 @@ async function extractMetadata(file: File, buffer: Buffer): Promise<ExtractedMet
 
   try {
     const parsedExif = await parseExif(buffer);
-
     exifRaw = parsedExif ? (parsedExif as Record<string, unknown>) : null;
   } catch {
     exifRaw = null;
@@ -408,6 +409,31 @@ function calibrateReport(report: FakeSightReport, metadata: ExtractedMetadata): 
 
 export async function POST(request: Request) {
   try {
+    const ip = getClientIp(request);
+    const rateLimit = checkRateLimit(ip);
+    const rateLimitConfig = getRateLimitConfig();
+
+    if (!rateLimit.allowed) {
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil((rateLimit.resetAt - Date.now()) / 1000 / 60)
+      );
+
+      return NextResponse.json(
+        {
+          error: `Rate limit reached. Please try again in about ${minutesLeft} minutes.`,
+        },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": String(rateLimitConfig.limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
+    }
+
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: "Server is missing OPENAI_API_KEY." },
@@ -419,11 +445,31 @@ export async function POST(request: Request) {
     const file = formData.get("image") as File | null;
 
     if (!file) {
-      return NextResponse.json({ error: "No image uploaded." }, { status: 400 });
+      return NextResponse.json(
+        { error: "No image uploaded." },
+        {
+          status: 400,
+          headers: {
+            "X-RateLimit-Limit": String(rateLimitConfig.limit),
+            "X-RateLimit-Remaining": String(rateLimit.remaining),
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
     }
 
     if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Uploaded file must be an image." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Uploaded file must be an image." },
+        {
+          status: 400,
+          headers: {
+            "X-RateLimit-Limit": String(rateLimitConfig.limit),
+            "X-RateLimit-Remaining": String(rateLimit.remaining),
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
     }
 
     const maxSize = 8 * 1024 * 1024;
@@ -431,7 +477,14 @@ export async function POST(request: Request) {
     if (file.size > maxSize) {
       return NextResponse.json(
         { error: "Image is too large. Please upload an image under 8MB." },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            "X-RateLimit-Limit": String(rateLimitConfig.limit),
+            "X-RateLimit-Remaining": String(rateLimit.remaining),
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
       );
     }
 
@@ -595,10 +648,24 @@ ${JSON.stringify(metadata, null, 2)}
     const parsed = JSON.parse(response.output_text) as FakeSightReport;
     const report = calibrateReport(parsed, metadata);
 
-    return NextResponse.json({
-      report,
-      metadata,
-    });
+    return NextResponse.json(
+      {
+        report,
+        metadata,
+        rateLimit: {
+          limit: rateLimitConfig.limit,
+          remaining: rateLimit.remaining,
+          resetAt: rateLimit.resetAt,
+        },
+      },
+      {
+        headers: {
+          "X-RateLimit-Limit": String(rateLimitConfig.limit),
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "X-RateLimit-Reset": String(rateLimit.resetAt),
+        },
+      }
+    );
   } catch (error) {
     console.error("FakeSight analysis failed:", error);
 
