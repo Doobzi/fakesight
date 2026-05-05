@@ -3,17 +3,22 @@
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 
 type Risk = "Low" | "Medium" | "High";
+type Confidence = "Low" | "Medium" | "High";
+
+type Signal = {
+  title: string;
+  explanation: string;
+  severity: Risk;
+};
 
 type FakeSightReport = {
-  score: number;
+  suspicionScore: number;
   risk: Risk;
+  confidence: Confidence;
   verdict: string;
   summary: string;
-  signals: {
-    title: string;
-    explanation: string;
-    severity: Risk;
-  }[];
+  visualSignals: Signal[];
+  metadataSignals: Signal[];
   recommendation: string;
   disclaimer: string;
 };
@@ -94,6 +99,14 @@ function riskBadgeClasses(risk?: Risk | null) {
   return "border-white/10 bg-white/[0.04] text-white/60";
 }
 
+function confidenceBadgeClasses(confidence?: Confidence | null) {
+  if (confidence === "High") return "border-cyan-400/20 bg-cyan-500/10 text-cyan-200";
+  if (confidence === "Medium") return "border-violet-400/20 bg-violet-500/10 text-violet-200";
+  if (confidence === "Low") return "border-white/10 bg-white/[0.04] text-white/55";
+
+  return "border-white/10 bg-white/[0.04] text-white/55";
+}
+
 function severityDotClasses(severity: Risk) {
   if (severity === "Low") return "bg-emerald-300";
   if (severity === "Medium") return "bg-amber-300";
@@ -103,6 +116,31 @@ function severityDotClasses(severity: Risk) {
 function scoreRing(score?: number | null) {
   if (typeof score !== "number") return 0;
   return Math.max(0, Math.min(100, score));
+}
+
+function scoreLabel(score?: number | null) {
+  if (typeof score !== "number") return "Awaiting image";
+  if (score >= 70) return "High suspicion";
+  if (score >= 40) return "Needs review";
+  return "Low suspicion";
+}
+
+function SignalCard({ signal }: { signal: Signal }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className={`h-2.5 w-2.5 rounded-full ${severityDotClasses(signal.severity)}`} />
+
+        <div className="font-medium text-white/90">{signal.title}</div>
+
+        <div className={`rounded-full border px-2 py-0.5 text-[11px] ${riskBadgeClasses(signal.severity)}`}>
+          {signal.severity}
+        </div>
+      </div>
+
+      <p className="mt-2 text-sm leading-7 text-white/65">{signal.explanation}</p>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -115,7 +153,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
-  const ringValue = scoreRing(report?.score);
+  const ringValue = scoreRing(report?.suspicionScore);
 
   function openFilePicker() {
     inputRef.current?.click();
@@ -238,19 +276,19 @@ export default function Home() {
             </h1>
 
             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
-              FakeSight helps people investigate visual content with clear, explainable trust
-              reports — so understanding the result feels simple, not technical.
+              FakeSight investigates visual content using stricter AI suspicion analysis, metadata
+              checks, and explainable trust reports.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
-                Clear reports
+                AI suspicion score
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
+                Metadata checks
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
                 Visual signal analysis
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
-                Built for trust
               </div>
             </div>
 
@@ -259,9 +297,9 @@ export default function Home() {
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05]">
                   <ScanIcon />
                 </div>
-                <div className="font-medium">Fast investigation</div>
+                <div className="font-medium">Stricter review</div>
                 <p className="mt-2 text-sm leading-6 text-white/55">
-                  Upload once and get a structured report in seconds.
+                  Hyperrealism is treated carefully, not as proof of authenticity.
                 </p>
               </div>
 
@@ -271,7 +309,7 @@ export default function Home() {
                 </div>
                 <div className="font-medium">Explainable signals</div>
                 <p className="mt-2 text-sm leading-6 text-white/55">
-                  Understand why something looks suspicious.
+                  See visual and metadata reasons behind the result.
                 </p>
               </div>
 
@@ -281,7 +319,7 @@ export default function Home() {
                 </div>
                 <div className="font-medium">Trust-first design</div>
                 <p className="mt-2 text-sm leading-6 text-white/55">
-                  Clear analysis without pretending to be absolute proof.
+                  Careful language without pretending to be absolute proof.
                 </p>
               </div>
             </div>
@@ -295,12 +333,12 @@ export default function Home() {
                 <div>
                   <div className="text-xl font-semibold">Investigate an image</div>
                   <div className="mt-1 text-sm text-white/[0.45]">
-                    Upload content and generate a FakeSight report
+                    Upload content and generate a FakeSight V2 report
                   </div>
                 </div>
 
                 <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/60">
-                  Beta
+                  V2
                 </div>
               </div>
 
@@ -383,7 +421,7 @@ export default function Home() {
                     disabled={!file || loading}
                     className="inline-flex flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {loading ? "Analyzing..." : "Analyze with FakeSight"}
+                    {loading ? "Investigating..." : "Analyze with FakeSight"}
                   </button>
                 </div>
 
@@ -398,7 +436,9 @@ export default function Home() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold">FakeSight Report</div>
-                    <div className="text-sm text-white/[0.45]">Structured investigation output</div>
+                    <div className="text-sm text-white/[0.45]">
+                      Visual analysis + metadata investigation
+                    </div>
                   </div>
 
                   <div className={`rounded-full border px-3 py-1 text-xs ${riskBadgeClasses(report?.risk)}`}>
@@ -418,10 +458,10 @@ export default function Home() {
                   </div>
                 ) : report ? (
                   <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                    <div className="grid gap-4 md:grid-cols-[190px_1fr]">
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                          Authenticity score
+                          AI suspicion
                         </div>
 
                         <div className="mt-5 flex items-center justify-center">
@@ -429,7 +469,7 @@ export default function Home() {
                             className="relative flex h-28 w-28 items-center justify-center rounded-full"
                             style={{
                               background: `conic-gradient(
-                                rgba(34,211,238,0.95) 0%,
+                                rgba(244,63,94,0.95) 0%,
                                 rgba(139,92,246,0.95) ${ringValue}%,
                                 rgba(255,255,255,0.08) ${ringValue}%,
                                 rgba(255,255,255,0.08) 100%
@@ -437,19 +477,29 @@ export default function Home() {
                             }}
                           >
                             <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#09090B]">
-                              <div className="text-3xl font-semibold">{report.score}</div>
+                              <div className="text-3xl font-semibold">{report.suspicionScore}</div>
                               <div className="text-xs text-white/40">/100</div>
                             </div>
                           </div>
                         </div>
+
+                        <div className="mt-4 text-center text-sm text-white/60">
+                          {scoreLabel(report.suspicionScore)}
+                        </div>
                       </div>
 
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                          Verdict
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                            Verdict
+                          </div>
+
+                          <div className={`rounded-full border px-2 py-0.5 text-[11px] ${confidenceBadgeClasses(report.confidence)}`}>
+                            {report.confidence} confidence
+                          </div>
                         </div>
 
-                        <div className="mt-3 text-2xl font-semibold">{report.verdict}</div>
+                        <div className="text-2xl font-semibold">{report.verdict}</div>
 
                         <p className="mt-3 text-sm leading-7 text-white/70">{report.summary}</p>
                       </div>
@@ -457,33 +507,24 @@ export default function Home() {
 
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                        Suspicious signals
+                        Visual signals
                       </div>
 
                       <div className="mt-4 space-y-3">
-                        {report.signals.map((signal, index) => (
-                          <div
-                            key={index}
-                            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3"
-                          >
-                            <div className="flex flex-wrap items-center gap-3">
-                              <div
-                                className={`h-2.5 w-2.5 rounded-full ${severityDotClasses(signal.severity)}`}
-                              />
+                        {report.visualSignals.map((signal, index) => (
+                          <SignalCard key={index} signal={signal} />
+                        ))}
+                      </div>
+                    </div>
 
-                              <div className="font-medium text-white/90">{signal.title}</div>
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Metadata signals
+                      </div>
 
-                              <div
-                                className={`rounded-full border px-2 py-0.5 text-[11px] ${riskBadgeClasses(signal.severity)}`}
-                              >
-                                {signal.severity}
-                              </div>
-                            </div>
-
-                            <p className="mt-2 text-sm leading-7 text-white/65">
-                              {signal.explanation}
-                            </p>
-                          </div>
+                      <div className="mt-4 space-y-3">
+                        {report.metadataSignals.map((signal, index) => (
+                          <SignalCard key={index} signal={signal} />
                         ))}
                       </div>
                     </div>
@@ -503,10 +544,10 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                  <div className="grid gap-4 md:grid-cols-[190px_1fr]">
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-                        Authenticity score
+                        AI suspicion
                       </div>
 
                       <div className="mt-5 flex items-center justify-center">
@@ -523,7 +564,7 @@ export default function Home() {
                         </div>
 
                         <p className="mt-3 text-sm text-white/[0.45]">
-                          Upload an image to generate a full FakeSight report.
+                          Upload an image to generate a FakeSight V2 investigation report.
                         </p>
                       </div>
 
@@ -533,7 +574,7 @@ export default function Home() {
                         </div>
 
                         <p className="mt-3 text-sm text-white/[0.45]">
-                          Key investigation signals will appear here after analysis.
+                          Visual and metadata signals will appear here after analysis.
                         </p>
                       </div>
                     </div>
@@ -564,20 +605,19 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
-              <div className="mb-4 text-lg font-semibold">Designed for trust</div>
+              <div className="mb-4 text-lg font-semibold">More cautious scoring</div>
 
               <p className="text-sm leading-7 text-white/60">
-                The product is built around careful language, clear reporting, and useful next
-                steps instead of false certainty.
+                The score now measures AI suspicion instead of pretending to prove authenticity.
               </p>
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
-              <div className="mb-4 text-lg font-semibold">Ready to expand</div>
+              <div className="mb-4 text-lg font-semibold">Built to improve</div>
 
               <p className="text-sm leading-7 text-white/60">
-                This same foundation can later power browser tools, APIs, and trust infrastructure
-                for larger platforms.
+                This foundation can later expand with test datasets, user feedback, and source
+                provenance checks.
               </p>
             </div>
           </div>
