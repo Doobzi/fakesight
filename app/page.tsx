@@ -4,6 +4,7 @@ import { ChangeEvent, DragEvent, useRef, useState } from "react";
 
 type Risk = "Low" | "Medium" | "High";
 type Confidence = "Low" | "Medium" | "High";
+type FeedbackChoice = "Correct" | "Wrong" | "Unsure";
 
 type Signal = {
   title: string;
@@ -91,6 +92,25 @@ function ShieldIcon() {
   );
 }
 
+function PrivacyIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-cyan-100/90">
+      <path
+        d="M12 3L19 6V11C19 15.5 16.1 19.74 12 21C7.9 19.74 5 15.5 5 11V6L12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M9.5 12.2L11.2 13.9L14.8 10.3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function riskBadgeClasses(risk?: Risk | null) {
   if (risk === "Low") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-300";
   if (risk === "Medium") return "border-amber-400/20 bg-amber-500/10 text-amber-300";
@@ -105,6 +125,14 @@ function confidenceBadgeClasses(confidence?: Confidence | null) {
   if (confidence === "Low") return "border-white/10 bg-white/[0.04] text-white/55";
 
   return "border-white/10 bg-white/[0.04] text-white/55";
+}
+
+function feedbackButtonClasses(current: FeedbackChoice | null, value: FeedbackChoice) {
+  if (current === value) {
+    return "border-cyan-300/35 bg-cyan-400/15 text-cyan-100";
+  }
+
+  return "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06]";
 }
 
 function severityDotClasses(severity: Risk) {
@@ -152,6 +180,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackChoice | null>(null);
 
   const ringValue = scoreRing(report?.suspicionScore);
 
@@ -162,6 +191,7 @@ export default function Home() {
   function selectImage(selected: File | null) {
     setReport(null);
     setError("");
+    setFeedback(null);
 
     if (!selected) {
       setFile(null);
@@ -198,6 +228,31 @@ export default function Home() {
     selectImage(droppedFile);
   }
 
+  function saveFeedback(choice: FeedbackChoice) {
+    setFeedback(choice);
+
+    if (!report) return;
+
+    const feedbackEntry = {
+      createdAt: new Date().toISOString(),
+      feedback: choice,
+      fileName: file?.name || "unknown",
+      score: report.suspicionScore,
+      risk: report.risk,
+      verdict: report.verdict,
+      confidence: report.confidence,
+    };
+
+    try {
+      const existing = JSON.parse(localStorage.getItem("fakesight_feedback") || "[]");
+      const updated = Array.isArray(existing) ? [feedbackEntry, ...existing].slice(0, 50) : [feedbackEntry];
+
+      localStorage.setItem("fakesight_feedback", JSON.stringify(updated));
+    } catch {
+      localStorage.setItem("fakesight_feedback", JSON.stringify([feedbackEntry]));
+    }
+  }
+
   async function analyzeImage() {
     if (!file) return;
 
@@ -205,6 +260,7 @@ export default function Home() {
       setLoading(true);
       setError("");
       setReport(null);
+      setFeedback(null);
 
       const formData = new FormData();
       formData.append("image", file);
@@ -406,6 +462,23 @@ export default function Home() {
                   )}
                 </div>
 
+                <div className="mt-4 rounded-2xl border border-cyan-400/15 bg-cyan-500/[0.07] p-4">
+                  <div className="flex gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10">
+                      <PrivacyIcon />
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-medium text-cyan-50/90">Privacy & trust note</div>
+                      <p className="mt-1 text-xs leading-6 text-cyan-50/65">
+                        FakeSight analyzes uploaded images only to generate an investigation report.
+                        Avoid uploading private, sensitive, or personal images. Results are
+                        investigative signals, not absolute proof.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
@@ -537,6 +610,39 @@ export default function Home() {
                       <p className="mt-3 text-sm leading-7 text-cyan-50/80">
                         {report.recommendation}
                       </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="mb-3 text-sm font-medium text-white/85">
+                        Was this result helpful?
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {(["Correct", "Wrong", "Unsure"] as FeedbackChoice[]).map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => saveFeedback(choice)}
+                            className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${feedbackButtonClasses(
+                              feedback,
+                              choice
+                            )}`}
+                          >
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+
+                      {feedback ? (
+                        <p className="mt-3 text-xs leading-6 text-cyan-100/60">
+                          Thanks — your feedback was saved locally for now. Later we can connect this
+                          to a database so FakeSight can learn from real user results.
+                        </p>
+                      ) : (
+                        <p className="mt-3 text-xs leading-6 text-white/[0.45]">
+                          Your feedback helps identify where FakeSight is too strict, too soft, or uncertain.
+                        </p>
+                      )}
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
