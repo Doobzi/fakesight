@@ -1,65 +1,571 @@
-import Image from "next/image";
+"use client";
+
+import { ChangeEvent, useRef, useState } from "react";
+
+type Risk = "Low" | "Medium" | "High";
+
+type FakeSightReport = {
+  score: number;
+  risk: Risk;
+  verdict: string;
+  summary: string;
+  signals: {
+    title: string;
+    explanation: string;
+    severity: Risk;
+  }[];
+  recommendation: string;
+  disclaimer: string;
+};
+
+function LogoMark() {
+  return (
+    <div className="bg-gradient-to-br from-violet-300 via-violet-400 to-cyan-300 bg-clip-text text-3xl font-semibold leading-none text-transparent">
+      Φ
+    </div>
+  );
+}
+
+function UploadGlyph() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="text-white/85"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 15V7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8.8 10.2L12 7L15.2 10.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M7 17.5H17"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ScanIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white/90">
+      <path d="M4 8V6C4 4.9 4.9 4 6 4H8" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M16 4H18C19.1 4 20 4.9 20 6V8" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M20 16V18C20 19.1 19.1 20 18 20H16" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 20H6C4.9 20 4 19.1 4 18V16" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 12H17" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function SignalIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white/90">
+      <path
+        d="M12 3L13.8 8.2L19 10L13.8 11.8L12 17L10.2 11.8L5 10L10.2 8.2L12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-white/90">
+      <path
+        d="M12 3L19 6V11C19 15.5 16.1 19.74 12 21C7.9 19.74 5 15.5 5 11V6L12 3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path d="M9.5 12L11.2 13.7L14.8 10.1" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function riskBadgeClasses(risk?: Risk | null) {
+  if (risk === "Low") {
+    return "border-emerald-400/20 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (risk === "Medium") {
+    return "border-amber-400/20 bg-amber-500/10 text-amber-300";
+  }
+
+  if (risk === "High") {
+    return "border-rose-400/20 bg-rose-500/10 text-rose-300";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-white/60";
+}
+
+function severityDotClasses(severity: Risk) {
+  if (severity === "Low") return "bg-emerald-300";
+  if (severity === "Medium") return "bg-amber-300";
+  return "bg-rose-300";
+}
+
+function scoreRing(score?: number | null) {
+  if (typeof score !== "number") return 0;
+  return Math.max(0, Math.min(100, score));
+}
 
 export default function Home() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [report, setReport] = useState<FakeSightReport | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const ringValue = scoreRing(report?.score);
+
+  function openFilePicker() {
+    inputRef.current?.click();
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0] || null;
+
+    
+
+    setFile(selected);
+    setReport(null);
+    setError("");
+
+    if (selected) {
+      setPreview(URL.createObjectURL(selected));
+    } else {
+      setPreview(null);
+    }
+  }
+
+  function handleDroppedFile(droppedFile: File | null) {
+  if (!droppedFile || !droppedFile.type.startsWith("image/")) return;
+
+  setFile(droppedFile);
+  setReport(null);
+  setError("");
+  setPreview(URL.createObjectURL(droppedFile));
+}
+
+function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const droppedFile = event.dataTransfer.files?.[0] || null;
+  handleDroppedFile(droppedFile);
+}
+
+  async function analyzeImage() {
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      setReport(null);
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const result = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await result.json();
+
+      if (!result.ok) {
+        setError(data.error || "Analysis failed.");
+        return;
+      }
+
+      setReport(data.report);
+    } catch (err) {
+      console.error(err);
+      setError("Analysis failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      {/* Background */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-[-120px] top-[80px] h-[320px] w-[320px] rounded-full bg-violet-600/12 blur-[120px]" />
+        <div className="absolute right-[-120px] top-[140px] h-[260px] w-[260px] rounded-full bg-cyan-500/10 blur-[120px]" />
+        <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:44px_44px]" />
+      </div>
+
+      <div className="relative mx-auto max-w-7xl px-6 py-6 md:px-8 lg:px-10">
+        {/* Header */}
+        <header className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0b0b0f] px-5 py-4">
+          <div className="flex items-center gap-3">
+            <LogoMark />
+            <div>
+              <div className="text-xl font-semibold tracking-tight">FakeSight</div>
+              <div className="text-xs text-white/45">AI content investigation platform</div>
+            </div>
+          </div>
+
+          <div className="hidden md:block">
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/65">
+              Detect • Explain • Verify
+            </div>
+          </div>
+        </header>
+
+        {/* Hero */}
+        <section className="grid gap-12 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:py-16">
+          <div className="pt-2">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-sm text-violet-200">
+              <span className="h-2 w-2 rounded-full bg-violet-300" />
+              See what’s real before you believe it
+            </div>
+
+            <h1 className="max-w-4xl text-5xl font-semibold leading-[0.94] tracking-tight md:text-7xl">
+              Detect suspicious
+              <span className="block bg-gradient-to-r from-white via-violet-200 to-cyan-200 bg-clip-text text-transparent">
+                AI-generated images
+              </span>
+              with clarity.
+            </h1>
+
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-white/65 md:text-xl">
+              FakeSight helps people investigate visual content with clear, explainable trust
+              reports — so understanding the result feels simple, not technical.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
+                Clear reports
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
+                Visual signal analysis
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/75">
+                Built for trust
+              </div>
+            </div>
+
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-[#0b0b0f] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05]">
+                  <ScanIcon />
+                </div>
+                <div className="font-medium">Fast investigation</div>
+                <p className="mt-2 text-sm leading-6 text-white/55">
+                  Upload once and get a structured report in seconds.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-[#0b0b0f] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05]">
+                  <SignalIcon />
+                </div>
+                <div className="font-medium">Explainable signals</div>
+                <p className="mt-2 text-sm leading-6 text-white/55">
+                  Understand why something looks suspicious.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-[#0b0b0f] p-5">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05]">
+                  <ShieldIcon />
+                </div>
+                <div className="font-medium">Trust-first design</div>
+                <p className="mt-2 text-sm leading-6 text-white/55">
+                  Clear analysis without pretending to be absolute proof.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right panel */}
+          <div className="relative">
+            <div className="absolute -inset-0.5 rounded-[28px] bg-gradient-to-br from-violet-500/15 via-transparent to-cyan-400/10 blur-2xl" />
+            <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0b0f] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-xl font-semibold">Investigate an image</div>
+                  <div className="mt-1 text-sm text-white/45">
+                    Upload content and generate a FakeSight report
+                  </div>
+                </div>
+
+                <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/60">
+                  Beta
+                </div>
+              </div>
+
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {/* Upload area */}
+              <div className="rounded-3xl border border-white/10 bg-[#101014] p-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={openFilePicker}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={handleDrop}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openFilePicker();
+                    }
+                  }}
+                  className="flex min-h-[290px] w-full cursor-pointer flex-col items-center justify-center rounded-[24px] border border-dashed border-white/12 bg-[#0a0a0e] px-6 py-8 text-center outline-none transition-colors hover:border-violet-400/25"
+                >
+                  {preview ? (
+                    <img
+                      src={preview}
+                      alt="Uploaded preview"
+                      className="max-h-64 rounded-2xl border border-white/10 object-contain shadow-2xl"
+                    />
+                  ) : (
+                    <>
+                      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-500/10 text-violet-200">
+                        <UploadGlyph />
+                      </div>
+                      <div className="text-xl font-medium text-white/92">
+                        Drop an image here or click to upload
+                      </div>
+                      <div className="mt-2 text-sm text-white/45">
+                        Supports screenshots, photos, and suspicious AI images
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06]"
+                  >
+                    Choose image
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={analyzeImage}
+                    disabled={!file || loading}
+                    className="inline-flex flex-1 items-center justify-center rounded-2xl bg-gradient-to-r from-violet-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {loading ? "Analyzing..." : "Analyze with FakeSight"}
+                  </button>
+                </div>
+
+                {file && (
+                  <div className="mt-3 text-xs text-white/45">
+                    Selected: <span className="text-white/70">{file.name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Report */}
+              <div className="mt-5 rounded-3xl border border-white/10 bg-[#101014] p-4">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold">FakeSight Report</div>
+                    <div className="text-sm text-white/45">Structured investigation output</div>
+                  </div>
+
+                  <div className={`rounded-full border px-3 py-1 text-xs ${riskBadgeClasses(report?.risk)}`}>
+                    {report?.risk ? `${report.risk} risk` : loading ? "Scanning..." : "Awaiting analysis"}
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="space-y-4">
+                    <div className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
+                    <div className="h-32 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
+                    <div className="h-28 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
+                  </div>
+                ) : error ? (
+                  <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">
+                    {error}
+                  </div>
+                ) : report ? (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                          Authenticity score
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-center">
+                          <div
+                            className="relative flex h-28 w-28 items-center justify-center rounded-full"
+                            style={{
+                              background: `conic-gradient(
+                                rgba(34,211,238,0.95) 0%,
+                                rgba(139,92,246,0.95) ${ringValue}%,
+                                rgba(255,255,255,0.08) ${ringValue}%,
+                                rgba(255,255,255,0.08) 100%
+                              )`,
+                            }}
+                          >
+                            <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-[#09090B]">
+                              <div className="text-3xl font-semibold">{report.score}</div>
+                              <div className="text-xs text-white/40">/100</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                          Verdict
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold">{report.verdict}</div>
+                        <p className="mt-3 text-sm leading-7 text-white/70">{report.summary}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Suspicious signals
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {report.signals.map((signal, index) => (
+                          <div
+                            key={index}
+                            className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`h-2.5 w-2.5 rounded-full ${severityDotClasses(signal.severity)}`}
+                              />
+                              <div className="font-medium text-white/90">{signal.title}</div>
+                              <div
+                                className={`rounded-full border px-2 py-0.5 text-[11px] ${riskBadgeClasses(signal.severity)}`}
+                              >
+                                {signal.severity}
+                              </div>
+                            </div>
+
+                            <p className="mt-2 text-sm leading-7 text-white/65">
+                              {signal.explanation}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-cyan-400/15 bg-cyan-500/10 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-cyan-200/75">
+                        Recommendation
+                      </div>
+                      <p className="mt-3 text-sm leading-7 text-cyan-50/80">
+                        {report.recommendation}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <p className="text-xs leading-6 text-white/45">{report.disclaimer}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Authenticity score
+                      </div>
+                      <div className="mt-5 flex items-center justify-center">
+                        <div className="flex h-28 w-28 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-3xl font-semibold text-white/25">
+                          --
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                          Summary
+                        </div>
+                        <p className="mt-3 text-sm text-white/45">
+                          Upload an image to generate a full FakeSight report.
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.18em] text-white/40">
+                          Signals
+                        </div>
+                        <p className="mt-3 text-sm text-white/45">
+                          Key investigation signals will appear here after analysis.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Lower section */}
+        <section className="pb-14">
+          <div className="mb-6">
+            <div className="text-sm uppercase tracking-[0.22em] text-white/40">Why FakeSight</div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+              A cleaner trust layer for the AI internet
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
+              <div className="mb-4 text-lg font-semibold">Simple to understand</div>
+              <p className="text-sm leading-7 text-white/60">
+                FakeSight turns complex visual analysis into a result normal users can actually
+                read and understand.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
+              <div className="mb-4 text-lg font-semibold">Designed for trust</div>
+              <p className="text-sm leading-7 text-white/60">
+                The product is built around careful language, clear reporting, and useful next
+                steps instead of false certainty.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0b0b0f] p-6">
+              <div className="mb-4 text-lg font-semibold">Ready to expand</div>
+              <p className="text-sm leading-7 text-white/60">
+                This same foundation can later power browser tools, APIs, and trust infrastructure
+                for larger platforms.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
