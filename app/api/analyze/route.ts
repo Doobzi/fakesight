@@ -137,21 +137,15 @@ async function extractMetadata(file: File, buffer: Buffer): Promise<ExtractedMet
 
   let exifRaw: Record<string, unknown> | null = null;
 
-  try {
-    exifRaw = ((await parseExif(buffer, {
-      tiff: true,
-      ifd0: true,
-      ifd1: true,
-      exif: true,
-      gps: true,
-      xmp: true,
-      icc: true,
-      jfif: true,
-      ihdr: true,
-    })) || null) as Record<string, unknown> | null;
-  } catch {
-    exifRaw = null;
-  }
+try {
+  const parsedExif = await parseExif(buffer);
+
+  exifRaw = parsedExif
+    ? (parsedExif as Record<string, unknown>)
+    : null;
+} catch {
+  exifRaw = null;
+}
 
   const importantKeys = [
     "Make",
